@@ -1,37 +1,46 @@
+# Frontend Deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: frontend
+  name: frontend-app
+  labels:
+    app: frontend-app
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: frontend
+      app: frontend-app
   template:
     metadata:
       labels:
-        app: frontend
+        app: frontend-app
     spec:
       containers:
-      - name: frontend
-        image: <ACR_URI>/frontend-app:$(Build.BuildId)
+      - name: frontend-app
+        image: <ACR_NAME>.azurecr.io/frontend-app:latest
+        ports:
+        - containerPort: 80
         resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
           limits:
             cpu: "500m"
             memory: "512Mi"
-          requests:
-            cpu: "250m"
-            memory: "256Mi"
+
 ---
-apiVersion: autoscaling/v2beta2
+# Frontend Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: frontend-hpa
+  name: frontend-app-hpa
+  labels:
+    app: frontend-app
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: frontend
+    name: frontend-app
   minReplicas: 2
   maxReplicas: 5
   metrics:
@@ -40,4 +49,21 @@ spec:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: 50
+        averageUtilization: 50  # Scale if CPU utilization is above 50%
+
+---
+# Frontend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-app-service
+  labels:
+    app: frontend-app
+spec:
+  type: LoadBalancer  # Exposes frontend publicly
+  selector:
+    app: frontend-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
