@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: frontend-app
-        image: <ACR_NAME>.azurecr.io/frontend-app:latest
+        image: <ACR_LOGIN_SERVER>/frontend-app:latest
         ports:
         - containerPort: 80
         resources:

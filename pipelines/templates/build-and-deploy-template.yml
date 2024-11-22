@@ -1,0 +1,52 @@
+parameters:
+  environment: ""
+  acrSecretName: ""
+  acrLoginServer: ""
+  imageTag: ""
+
+jobs:
+  - job: BuildAndDeploy
+    displayName: "Build and Deploy for $(parameters.environment)"
+    steps:
+      # Step 1: Checkout Code
+      - task: Checkout@1
+
+      # Step 2: Retrieve Secrets from Azure Key Vault
+      - task: AzureKeyVault@2
+        inputs:
+          azureSubscription: $(azureSubscription)
+          KeyVaultName: "my-${{ parameters.environment }}-keyvault"
+          SecretsFilter: "${{ parameters.environment }}-${{ parameters.acrLoginServer }}"
+
+      - task: NodeTool@0
+        inputs:
+          versionSpec: '14.x'
+
+      - script: |
+          npm install
+          npm run build
+        displayName: 'Build React Application'
+
+      # Step 3: Build and Push Docker Image
+      - task: Docker@2
+        displayName: "Build and Push Docker Image to $(parameters.environment) ACR"
+        inputs:
+          containerRegistry: "ACR-Service-Connection"
+          repository: "${{ parameters.environment }}-${{ parameters.acrLoginServer }}/backend-app"
+          command: "buildAndPush"
+          Dockerfile: "./Dockerfile"
+          tags: "$(parameters.imageTag)"
+
+      # Step 3: Replace Placeholders in Kubernetes Manifest
+      - script: |
+          sed -i "s|<ACR_LOGIN_SERVER>|$(${{ parameters.environment }}-${{ parameters.acrLoginServer }})|g" ./k8s/frontend-deployment.yml
+        displayName: "Replace Placeholders in $(parameters.environment) Manifest"
+
+      # Step 5: Deploy to AKS
+      - task: Kubernetes@1
+        inputs:
+          connectionType: 'Kubernetes Service Connection'
+          namespace: "$(parameters.environment)"
+          command: 'apply'
+          useConfigurationFile: true
+          configuration: './k8s/frontend-deployment.yml'
